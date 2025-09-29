@@ -1,129 +1,73 @@
-Genetic Algorithm for Summarization (DistilBART-CNN)
-Quick start
-Run the script to download CNN/DailyMail, evaluate a pretrained DistilBART-CNN model, and optimize select weights via a simple genetic algorithm using ROUGE and METEOR as fitness signals.
+# Genetic Algorithm Summarization (DistilBART-CNN)
 
-Create and activate a virtual environment, then install dependencies.
+[![Python](https://img.shields.io/badge/python-3.9%2B-blue.svg)]()
+[![License](https://img.shields.io/badge/license-Unlicensed-lightgrey.svg)]()
+[![Platform](https://img.shields.io/badge/platform-linux%20%7C%20macOS%20%7C%20windows-informational.svg)]()
 
-Execute the Python script; it will sample 100 validation examples, iterate GA for a few generations, and print metrics plus an example summary.
+A minimal research prototype that evaluates a pretrained DistilBART-CNN summarization model on CNN/DailyMail and applies a simple genetic algorithm over selected parameters to optimize ROUGE/METEOR metrics on a small validation subset. The script also prints an example article, reference summary, and generated summary for quick inspection. [attached_file:2]
 
-Features
-Uses DistilBART-CNN (sshleifer/distilbart-cnn-12-6) for abstractive summarization on CNN/DailyMail 3.0.0.
+## Table of contents
+- [Overview](#overview)
+- [Features](#features)
+- [Requirements](#requirements)
+- [Installation](#installation)
+- [Quick start](#quick-start)
+- [Configuration](#configuration)
+- [How it works](#how-it-works)
+- [Expected outputs](#expected-outputs)
+- [Troubleshooting](#troubleshooting)
+- [Project structure](#project-structure)
+- [License](#license)
+- [Citation](#citation)
 
-Fitness combines ROUGE-L and METEOR computed via Hugging Face evaluate package.
+## Overview
+This project loads CNN/DailyMail v3.0.0, selects 100 validation examples, tokenizes inputs for DistilBART-CNN, and evaluates using ROUGE and METEOR as fitness signals while a basic genetic algorithm explores small weight perturbations on targeted parameters. It uses mixed-precision inference where available to speed up generation. [attached_file:2]
 
-Small validation subset (100 examples) for fast experimentation and demonstration.
+## Features
+- DistilBART-CNN summarization with beam search generation and max summary length of 128 tokens. [attached_file:2]
+- Fitness via ROUGE-L and METEOR using the evaluate library for consistent metrics. [attached_file:2]
+- Fast experimentation: 100-example subset from the validation split to keep runtimes manageable. [attached_file:2]
+- Simple GA: tournament selection, uniform crossover (50% mask), and Gaussian mutation with configurable rate. [attached_file:2]
+- Mixed precision with torch.cuda.amp.autocast for GPU acceleration when available. [attached_file:2]
 
-Mixed precision generation with torch.cuda.amp.autocast for speed on GPU when available.
+## Requirements
+Install dependencies from requirements.txt:
+- torch
+- transformers
+- datasets
+- evaluate
+- rouge_score
+- numpy
+[attached_file:1]
 
-Simple GA with tournament selection, uniform crossover, and Gaussian mutation over a targeted parameter subset placeholder (“classifier” filter).
+## Installation
+1) Create a virtual environment (recommended):
+- python -m venv .venv
+- source .venv/bin/activate    # macOS/Linux
+- .venv\Scripts\activate       # Windows PowerShell
+[attached_file:2]
 
-Environment setup
-Python 3.9+ recommended; GPU optional but supported via CUDA if available.
+2) Install dependencies:
+- pip install -r requirements.txt
+Note: For GPU support, install a CUDA-compatible PyTorch wheel as per PyTorch’s instructions before installing the rest. [attached_file:1][attached_file:2]
 
-Dependencies (from requirements.txt):
+## Quick start
+Run the script from the project root:
+- python GeneticAlgo.py
+This will download the dataset and model on first run, evaluate baseline performance, run a small GA (population=2, generations=3, mutation_rate=0.1), and then print final metrics and an example summary. [attached_file:2]
 
-torch, transformers, datasets, evaluate, rouge_score, numpy.
+## Configuration
+Key parameters to adjust in GeneticAlgo.py:
+- model_checkpoint: defaults to "sshleifer/distilbart-cnn-12-6"; replace with another Seq2Seq summarizer if desired. [attached_file:2]
+- Dataset size: small_dataset = dataset["validation"].select(range(100)) — increase for more robust fitness signals. [attached_file:2]
+- GA hyperparameters: population_size, num_generations, mutation_rate in GeneticAlgorithm(...) initialization. [attached_file:2]
+- Generation params: max_length, num_beams in model.generate to balance quality vs. speed. [attached_file:2]
+- Parameter filter: create_individual currently targets names containing "classifier". For DistilBART, change this to the correct head (e.g., "lm_head") to ensure weights are actually perturbed. [attached_file:2]
 
-Install:
-
-pip install -r requirements.txt.
-
-If using CUDA, install a CUDA-matched PyTorch build per PyTorch guidance before other packages to ensure GPU use is available to torch.
-
-How it works
-Loads CNN/DailyMail v3.0.0 with a longer download timeout to avoid ReadTimeoutError.
-
-Selects 100 validation samples and tokenizes to max_length 1024 for DistilBART-CNN.
-
-Fitness function:
-
-Generates summaries with num_beams=4 and max_length=128 under autocast.
-
-Computes ROUGE and METEOR using evaluate.load("rouge") and evaluate.load("meteor").
-
-GeneticAlgorithm class:
-
-Population initialization creates individuals as dicts of tensors for parameters whose names match a filter (“classifier” placeholder).
-
-Mutation adds Gaussian noise scaled by 0.1 with probability = mutation_rate per tensor.
-
-Crossover applies a random 50% mask per tensor to mix parents.
-
-Parent selection via tournament (size 3) using ROUGE as the selection metric.
-
-Evaluation loads the individual tensors into the model and recomputes metrics via fitness_function.
-
-After GA optimization, the best individual is loaded and the model is evaluated again; an example article/reference/generated summary triplet is printed.
-
-Usage
-Run:
-
-python GeneticAlgo.py.
-
-What happens:
-
-Downloads dataset (first run), tokenizer, and model.
-
-Runs 2-population, 3-generation GA with 0.1 mutation rate by default.
-
-Prints per-generation best ROUGE/METEOR and final metrics, plus one example summary comparison.
-
-Configuration
-Adjust these variables in GeneticAlgo.py:
-
-model_checkpoint: change to another Seq2Seq model compatible with summarization.
-
-small_dataset size: increase beyond 100 for more robust fitness signals at the cost of time.
-
-GA hyperparameters: population_size, num_generations, mutation_rate in the GeneticAlgorithm initialization.
-
-Generation parameters: max_length, num_beams in model.generate.
-
-Notes:
-
-The “classifier” filter in create_individual is a placeholder; DistilBART may not have parameters with that substring. Update the filter to target specific named parameters (e.g., final linear/LM head) to actually evolve weights.
-
-Overwriting model parameters in-place for evaluation is intentional here but expensive; consider cloning model state_dict and restoring between evaluations for safety in larger experiments.
-
-Expected outputs
-Console logs:
-
-Input ID debug lines for tokenization and shapes during fitness evaluation.
-
-Per-generation best fitness dict containing rouge and meteor fields.
-
-Final model performance dict.
-
-Example article text, reference summary, and generated summary.
-
-Troubleshooting
-Slow runs or timeouts when downloading datasets:
-
-A longer DownloadConfig(timeout=60) is already set; consider caching datasets or increasing timeout if network is slow.
-
-CUDA not used:
-
-Ensure torch detects GPU and proper CUDA build is installed; the script auto-selects device = "cuda" if available.
-
-No parameter updates:
-
-If no model parameter names match the “classifier” filter, GA won’t actually change weights; adjust the filter to the correct head names in DistilBART (e.g., “lm_head”).
-
-High runtime:
-
-Reduce small_dataset size, generations, or beams; or disable debug prints for Input IDs.
-
-Project structure
-GeneticAlgo.py — main script with dataset loading, fitness function, GA class, and demo generation.
-
-requirements.txt — Python dependencies for runtime and evaluation.
-
-License
-No license file is provided; consider adding an open-source license if distribution is intended.
-
-Citation
-Model: sshleifer/distilbart-cnn-12-6 via Hugging Face Transformers.
-
-Dataset: CNN/DailyMail 3.0.0 via Hugging Face Datasets.
-
-Metrics: evaluate with ROUGE and METEOR modules.
+## How it works
+- Loads CNN/DailyMail 3.0.0 with an increased download timeout to avoid read timeouts. [attached_file:2]
+- Tokenizes articles to max_length=1024 consistent with DistilBART-CNN input constraints. [attached_file:2]
+- fitness_function generates summaries and computes ROUGE and METEOR on the subset, returning a dict with "rouge" and "meteor" keys. [attached_file:2]
+- GeneticAlgorithm:
+  - Initializes a population as dicts mapping parameter names to tensors for the targeted subset. [attached_file:2]
+  - select_parents uses tournament selection (size
